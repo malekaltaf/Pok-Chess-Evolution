@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>PokéChess Evolution</title>
+    <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+    <style>
+        body { font-family: 'Arial', sans-serif; background: #1a1a1a; color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+        #board { width: 450px; border: 5px solid #333; border-radius: 4px; }
+        #status-container { margin-top: 20px; background: #222; padding: 20px; border-radius: 10px; width: 450px; text-align: center; border: 1px solid #444; }
+        .poke-name { color: #ffcb05; font-size: 1.5em; font-weight: bold; text-transform: uppercase; margin: 10px 0; }
+        .stats { color: #4ee2ff; font-family: monospace; }
+    </style>
+</head>
+<body>
+
+    <div id="board"></div>
+    
+    <div id="status-container">
+        <div id="status">White's Turn</div>
+        <div id="poke-display">
+            <div class="poke-name" id="poke-name">Encounter a Pokémon!</div>
+            <div class="stats" id="poke-stats">Move a piece to start...</div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+
+    <script>
+        var board = null;
+        var game = new Chess();
+        var pieceImages = {}; // Stores Pokémon sprites for pieces
+
+        // THE FIX: Point pieceTheme to a CDN so images show up
+        const DEFAULT_PIECE_THEME = 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png';
+
+        async function fetchPokemonMove(isElimination) {
+            const randomId = Math.floor(Math.random() * 151) + 1; // Gen 1
+            const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${randomId}`);
+            const data = await response.json();
+            
+            document.getElementById('poke-name').innerText = data.name;
+            document.getElementById('poke-stats').innerText = 
+                isElimination ? `CRITICAL HIT! Type: ${data.types[0].type.name}` : `Wild Encounter! Type: ${data.types[0].type.name}`;
+            
+            return data.sprites.front_default;
+        }
+
+        function onDragStart (source, piece, position, orientation) {
+            if (game.game_over()) return false;
+            if ((game.turn() === 'w' && piece.search(/^b/) !== -1) ||
+                (game.turn() === 'b' && piece.search(/^w/) !== -1)) {
+                return false;
+            }
+        }
+
+        async function onDrop (source, target) {
+            var move = game.move({
+                from: source,
+                to: target,
+                promotion: 'q'
+            });
+
+            if (move === null) return 'snapback';
+
+            const isElimination = move.flags.includes('c');
+            const spriteUrl = await fetchPokemonMove(isElimination);
+
+            // Store the Pokémon sprite for this specific piece type
+            pieceImages[move.piece] = spriteUrl;
+            
+            updateStatus();
+        }
+
+        function onSnapEnd () {
+            board.position(game.fen());
+        }
+
+        // Custom piece renderer
+        function pieceTheme(piece) {
+            // If the piece has "evolved" into a Pokémon, show that. 
+            // Otherwise, show the standard chess piece.
+            if (pieceImages[piece.toLowerCase()]) {
+                return pieceImages[piece.toLowerCase()];
+            }
+            return DEFAULT_PIECE_THEME.replace('{piece}', piece);
+        }
+
+        function updateStatus () {
+            var moveColor = (game.turn() === 'b') ? 'Black' : 'White';
+            document.getElementById('status').innerText = moveColor + " to move";
+        }
+
+        var config = {
+            draggable: true,
+            position: 'start',
+            pieceTheme: pieceTheme, // Using our custom function
+            onDragStart: onDragStart,
+            onDrop: onDrop,
+            onSnapEnd: onSnapEnd
+        };
+
+        board = Chessboard('board', config);
+        updateStatus();
+    </script>
+</body>
+</html>
